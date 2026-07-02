@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>权限管理 - Excel系统</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <div class="admin-container">
+        <div class="admin-header">
+            <h1>权限管理</h1>
+            <button id="backBtn" class="back-btn">返回表格</button>
+        </div>
+        
+        <div class="permission-section">
+            <h2>设置用户列权限</h2>
+            
+            <select id="userSelect" class="user-select">
+                <option value="">请选择用户</option>
+            </select>
+            
+            <div id="permissionGrid" class="permission-grid"></div>
+            
+            <button id="saveBtn" class="save-btn">保存权限设置</button>
+            <div class="save-message" id="saveMessage">权限设置已保存！</div>
+        </div>
+    </div>
+    <script src="js/auth.js"></script>
+    <script>
+        let currentPermissions = {};
+        
+        function initUserSelect() {
+            const users = getUsers();
+            const select = document.getElementById('userSelect');
+            
+            users.forEach(user => {
+                const option = document.createElement('option');
+                option.value = user.username;
+                option.textContent = `${user.name} (${user.username})`;
+                select.appendChild(option);
+            });
+            
+            select.addEventListener('change', function() {
+                renderPermissions(this.value);
+            });
+        }
+        
+        function renderPermissions(username) {
+            const grid = document.getElementById('permissionGrid');
+            grid.innerHTML = '';
+            
+            if (!username) {
+                return;
+            }
+            
+            const columnConfig = getColumnConfig();
+            const allPermissions = getAllPermissions();
+            const userPermissions = allPermissions[username] || {};
+            
+            currentPermissions = { ...userPermissions };
+            
+            columnConfig.forEach(col => {
+                const perm = userPermissions[col.key] || { visible: true, editable: false };
+                
+                const item = document.createElement('div');
+                item.className = 'permission-item';
+                item.dataset.columnKey = col.key;
+                
+                item.innerHTML = `
+                    <h3>${col.label}</h3>
+                    <div class="permission-options">
+                        <div class="permission-option">
+                            <input type="checkbox" id="visible-${col.key}" ${perm.visible ? 'checked' : ''}>
+                            <label for="visible-${col.key}">可见</label>
+                        </div>
+                        <div class="permission-option">
+                            <input type="checkbox" id="editable-${col.key}" ${perm.editable ? 'checked' : ''}>
+                            <label for="editable-${col.key}">可编辑</label>
+                        </div>
+                    </div>
+                `;
+                
+                grid.appendChild(item);
+            });
+        }
+        
+        function savePermissionsHandler() {
+            const username = document.getElementById('userSelect').value;
+            if (!username) {
+                alert('请先选择用户');
+                return;
+            }
+            
+            const columnConfig = getColumnConfig();
+            const allPermissions = getAllPermissions();
+            
+            const userPermissions = {};
+            columnConfig.forEach(col => {
+                const visible = document.getElementById(`visible-${col.key}`).checked;
+                const editable = document.getElementById(`editable-${col.key}`).checked;
+                userPermissions[col.key] = { visible, editable };
+            });
+            
+            allPermissions[username] = userPermissions;
+            savePermissions(allPermissions);
+            
+            const saveMessage = document.getElementById('saveMessage');
+            saveMessage.style.display = 'block';
+            setTimeout(() => {
+                saveMessage.style.display = 'none';
+            }, 2000);
+        }
+        
+        function init() {
+            if (!checkAdminAccess()) {
+                return;
+            }
+            
+            initUserSelect();
+            
+            document.getElementById('backBtn').addEventListener('click', function() {
+                window.location.href = 'excel.html';
+            });
+            
+            document.getElementById('saveBtn').addEventListener('click', savePermissionsHandler);
+        }
+        
+        window.addEventListener('DOMContentLoaded', init);
+    </script>
+</body>
+</html>

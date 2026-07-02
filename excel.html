@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Excel表格 - 权限管理系统</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <div class="excel-container">
+        <div class="header">
+            <h1>Excel表格数据管理</h1>
+            <div class="user-info">
+                <span>当前用户：<strong id="currentUserName"></strong>（<span id="currentUserRole"></span>）</span>
+                <button id="adminBtn" class="admin-btn">权限管理</button>
+                <button id="logoutBtn" class="logout-btn">退出登录</button>
+            </div>
+        </div>
+        
+        <div class="table-wrapper">
+            <table class="excel-table" id="excelTable">
+                <thead>
+                    <tr></tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+        </div>
+    </div>
+    <script src="js/auth.js"></script>
+    <script src="js/excel.js"></script>
+    <script>
+        window.addEventListener('DOMContentLoaded', init);
+    </script>
+</body>
+</html>
