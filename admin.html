@@ -9,11 +9,35 @@
 <body>
     <div class="admin-container">
         <div class="admin-header">
-            <h1>权限管理</h1>
+            <h1>系统管理</h1>
             <button id="backBtn" class="back-btn">返回表格</button>
         </div>
         
-        <div class="permission-section">
+        <div class="tab-container">
+            <button class="tab-btn active" data-tab="employees">员工管理</button>
+            <button class="tab-btn" data-tab="permissions">权限管理</button>
+        </div>
+        
+        <div id="employeesTab" class="employee-section">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <h2>员工列表</h2>
+                <button id="addEmployeeBtn" class="add-btn">+ 新增员工</button>
+            </div>
+            
+            <table class="employee-table">
+                <thead>
+                    <tr>
+                        <th>用户名</th>
+                        <th>姓名</th>
+                        <th>角色</th>
+                        <th>操作</th>
+                    </tr>
+                </thead>
+                <tbody id="employeeTableBody"></tbody>
+            </table>
+        </div>
+        
+        <div id="permissionsTab" class="permission-section" style="display: none;">
             <h2>设置用户列权限</h2>
             
             <select id="userSelect" class="user-select">
@@ -26,13 +50,199 @@
             <div class="save-message" id="saveMessage">权限设置已保存！</div>
         </div>
     </div>
+    
+    <div id="employeeModal" class="modal-overlay">
+        <div class="modal">
+            <h3 id="modalTitle">新增员工</h3>
+            <form id="employeeForm">
+                <div class="form-group">
+                    <label for="modalUsername">用户名</label>
+                    <input type="text" id="modalUsername" name="username" placeholder="请输入用户名" required>
+                </div>
+                <div class="form-group">
+                    <label for="modalPassword">密码</label>
+                    <input type="password" id="modalPassword" name="password" placeholder="请输入密码" required>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="modalName">姓名</label>
+                        <input type="text" id="modalName" name="name" placeholder="请输入姓名" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="modalRole">角色</label>
+                        <select id="modalRole" name="role">
+                            <option value="user">普通用户</option>
+                            <option value="admin">管理员</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-buttons">
+                    <button type="button" id="cancelBtn" class="cancel-btn">取消</button>
+                    <button type="submit" class="confirm-btn">保存</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    
     <script src="js/auth.js"></script>
     <script>
+        let currentEditUser = null;
+        
+        function switchTab(tabName) {
+            document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+            document.querySelector(`[data-tab="${tabName}"]`).classList.add('active');
+            
+            document.getElementById('employeesTab').style.display = tabName === 'employees' ? 'block' : 'none';
+            document.getElementById('permissionsTab').style.display = tabName === 'permissions' ? 'block' : 'none';
+            
+            if (tabName === 'employees') {
+                renderEmployeeList();
+            } else {
+                initUserSelect();
+            }
+        }
+        
+        function renderEmployeeList() {
+            const tbody = document.getElementById('employeeTableBody');
+            tbody.innerHTML = '';
+            
+            const users = getUsers();
+            users.forEach(user => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td>${user.username}</td>
+                    <td>${user.name}</td>
+                    <td><span class="role-badge ${user.role}">${user.role === 'admin' ? '管理员' : '普通用户'}</span></td>
+                    <td>
+                        ${user.username !== 'admin' ? `<button class="action-btn edit-btn" data-username="${user.username}">编辑</button>` : ''}
+                        ${user.username !== 'admin' ? `<button class="action-btn delete-btn" data-username="${user.username}">删除</button>` : ''}
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+            
+            document.querySelectorAll('.edit-btn').forEach(btn => {
+                btn.addEventListener('click', function() {
+                    const username = this.dataset.username;
+                    editEmployee(username);
+                });
+            });
+            
+            document.querySelectorAll('.delete-btn').forEach(btn => {
+                btn.addEventListener('click', function() {
+                    const username = this.dataset.username;
+                    deleteEmployee(username);
+                });
+            });
+        }
+        
+        function openModal(title, user = null) {
+            currentEditUser = user;
+            document.getElementById('modalTitle').textContent = title;
+            
+            if (user) {
+                document.getElementById('modalUsername').value = user.username;
+                document.getElementById('modalPassword').value = '';
+                document.getElementById('modalPassword').placeholder = '不修改请留空';
+                document.getElementById('modalPassword').required = false;
+                document.getElementById('modalName').value = user.name;
+                document.getElementById('modalRole').value = user.role;
+            } else {
+                document.getElementById('employeeForm').reset();
+                document.getElementById('modalPassword').placeholder = '请输入密码';
+                document.getElementById('modalPassword').required = true;
+            }
+            
+            document.getElementById('employeeModal').classList.add('show');
+        }
+        
+        function closeModal() {
+            document.getElementById('employeeModal').classList.remove('show');
+            currentEditUser = null;
+        }
+        
+        function addEmployee() {
+            openModal('新增员工');
+        }
+        
+        function editEmployee(username) {
+            const user = getUserByUsername(username);
+            if (user) {
+                openModal('编辑员工', user);
+            }
+        }
+        
+        function deleteEmployee(username) {
+            if (confirm(`确定要删除员工 "${username}" 吗？此操作不可撤销。`)) {
+                const result = deleteUser(username);
+                if (result.success) {
+                    alert('删除成功');
+                    renderEmployeeList();
+                } else {
+                    alert(result.message);
+                }
+            }
+        }
+        
+        function saveEmployee(e) {
+            e.preventDefault();
+            
+            const username = document.getElementById('modalUsername').value.trim();
+            const password = document.getElementById('modalPassword').value.trim();
+            const name = document.getElementById('modalName').value.trim();
+            const role = document.getElementById('modalRole').value;
+            
+            if (!username || !name) {
+                alert('请填写完整信息');
+                return;
+            }
+            
+            if (currentEditUser) {
+                const result = updateUser(currentEditUser.username, {
+                    username: username,
+                    password: password || currentEditUser.password,
+                    name: name,
+                    role: role
+                });
+                
+                if (result.success) {
+                    alert('修改成功');
+                    closeModal();
+                    renderEmployeeList();
+                } else {
+                    alert(result.message);
+                }
+            } else {
+                if (!password) {
+                    alert('请输入密码');
+                    return;
+                }
+                
+                const result = addUser({
+                    username: username,
+                    password: password,
+                    name: name,
+                    role: role
+                });
+                
+                if (result.success) {
+                    alert('添加成功');
+                    closeModal();
+                    renderEmployeeList();
+                } else {
+                    alert(result.message);
+                }
+            }
+        }
+        
         let currentPermissions = {};
         
         function initUserSelect() {
             const users = getUsers();
             const select = document.getElementById('userSelect');
+            const currentValue = select.value;
+            
+            select.innerHTML = '<option value="">请选择用户</option>';
             
             users.forEach(user => {
                 const option = document.createElement('option');
@@ -40,6 +250,8 @@
                 option.textContent = `${user.name} (${user.username})`;
                 select.appendChild(option);
             });
+            
+            select.value = currentValue;
             
             select.addEventListener('change', function() {
                 renderPermissions(this.value);
@@ -117,13 +329,31 @@
                 return;
             }
             
-            initUserSelect();
+            document.querySelectorAll('.tab-btn').forEach(btn => {
+                btn.addEventListener('click', function() {
+                    switchTab(this.dataset.tab);
+                });
+            });
             
             document.getElementById('backBtn').addEventListener('click', function() {
                 window.location.href = 'excel.html';
             });
             
+            document.getElementById('addEmployeeBtn').addEventListener('click', addEmployee);
+            
+            document.getElementById('cancelBtn').addEventListener('click', closeModal);
+            
+            document.getElementById('employeeForm').addEventListener('submit', saveEmployee);
+            
             document.getElementById('saveBtn').addEventListener('click', savePermissionsHandler);
+            
+            document.getElementById('employeeModal').addEventListener('click', function(e) {
+                if (e.target === this) {
+                    closeModal();
+                }
+            });
+            
+            renderEmployeeList();
         }
         
         window.addEventListener('DOMContentLoaded', init);

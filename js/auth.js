@@ -1,4 +1,4 @@
-const USERS = [
+const DEFAULT_USERS = [
     { username: 'admin', password: 'admin', role: 'admin', name: '管理员' },
     { username: 'user1', password: 'user1', role: 'user', name: '张三' },
     { username: 'user2', password: 'user2', role: 'user', name: '李四' },
@@ -26,41 +26,92 @@ const DEFAULT_PERMISSIONS = {
         email: { visible: true, editable: true },
         address: { visible: true, editable: true },
         notes: { visible: true, editable: true }
-    },
-    user1: {
-        id: { visible: true, editable: false },
-        name: { visible: true, editable: true },
-        department: { visible: true, editable: false },
-        salary: { visible: false, editable: false },
-        phone: { visible: true, editable: true },
-        email: { visible: true, editable: true },
-        address: { visible: true, editable: true },
-        notes: { visible: true, editable: true }
-    },
-    user2: {
-        id: { visible: true, editable: false },
-        name: { visible: true, editable: false },
-        department: { visible: true, editable: false },
-        salary: { visible: true, editable: false },
-        phone: { visible: true, editable: false },
-        email: { visible: true, editable: true },
-        address: { visible: true, editable: true },
-        notes: { visible: true, editable: true }
-    },
-    user3: {
-        id: { visible: true, editable: false },
-        name: { visible: true, editable: false },
-        department: { visible: true, editable: false },
-        salary: { visible: false, editable: false },
-        phone: { visible: false, editable: false },
-        email: { visible: false, editable: false },
-        address: { visible: true, editable: false },
-        notes: { visible: true, editable: true }
     }
 };
 
+function initUsers() {
+    const stored = localStorage.getItem('excel_users');
+    if (!stored) {
+        localStorage.setItem('excel_users', JSON.stringify(DEFAULT_USERS));
+        return DEFAULT_USERS;
+    }
+    return JSON.parse(stored);
+}
+
+function saveUsers(users) {
+    localStorage.setItem('excel_users', JSON.stringify(users));
+}
+
 function getUsers() {
-    return USERS;
+    const stored = localStorage.getItem('excel_users');
+    return stored ? JSON.parse(stored) : initUsers();
+}
+
+function getUserByUsername(username) {
+    const users = getUsers();
+    return users.find(u => u.username === username);
+}
+
+function addUser(user) {
+    const users = getUsers();
+    if (users.find(u => u.username === user.username)) {
+        return { success: false, message: '用户名已存在' };
+    }
+    users.push(user);
+    saveUsers(users);
+    
+    const columnConfig = getColumnConfig();
+    const defaultPerm = {};
+    columnConfig.forEach(col => {
+        defaultPerm[col.key] = { visible: true, editable: false };
+    });
+    const permissions = getAllPermissions();
+    permissions[user.username] = defaultPerm;
+    savePermissions(permissions);
+    
+    return { success: true };
+}
+
+function updateUser(username, updatedUser) {
+    const users = getUsers();
+    const index = users.findIndex(u => u.username === username);
+    if (index === -1) {
+        return { success: false, message: '用户不存在' };
+    }
+    
+    if (username !== updatedUser.username) {
+        if (users.find(u => u.username === updatedUser.username)) {
+            return { success: false, message: '新用户名已存在' };
+        }
+        const permissions = getAllPermissions();
+        permissions[updatedUser.username] = permissions[username];
+        delete permissions[username];
+        savePermissions(permissions);
+    }
+    
+    users[index] = updatedUser;
+    saveUsers(users);
+    return { success: true };
+}
+
+function deleteUser(username) {
+    if (username === 'admin') {
+        return { success: false, message: '不能删除管理员账号' };
+    }
+    
+    const users = getUsers();
+    const newUsers = users.filter(u => u.username !== username);
+    if (newUsers.length === users.length) {
+        return { success: false, message: '用户不存在' };
+    }
+    
+    saveUsers(newUsers);
+    
+    const permissions = getAllPermissions();
+    delete permissions[username];
+    savePermissions(permissions);
+    
+    return { success: true };
 }
 
 function getColumnConfig() {
@@ -68,8 +119,8 @@ function getColumnConfig() {
 }
 
 function login(username, password) {
-    const user = USERS.find(u => u.username === username && u.password === password);
-    if (user) {
+    const user = getUserByUsername(username);
+    if (user && user.password === password) {
         const permissions = getPermissions(username);
         const session = {
             username: user.username,
@@ -109,7 +160,13 @@ function getPermissions(username) {
             return permissions[username];
         }
     }
-    return DEFAULT_PERMISSIONS[username] || DEFAULT_PERMISSIONS.user1;
+    
+    const columnConfig = getColumnConfig();
+    const defaultPerm = {};
+    columnConfig.forEach(col => {
+        defaultPerm[col.key] = { visible: true, editable: false };
+    });
+    return defaultPerm;
 }
 
 function getAllPermissions() {
@@ -117,7 +174,23 @@ function getAllPermissions() {
     if (stored) {
         return JSON.parse(stored);
     }
-    return DEFAULT_PERMISSIONS;
+    
+    const permissions = { ...DEFAULT_PERMISSIONS };
+    const users = getUsers();
+    const columnConfig = getColumnConfig();
+    
+    users.forEach(user => {
+        if (!permissions[user.username]) {
+            const defaultPerm = {};
+            columnConfig.forEach(col => {
+                defaultPerm[col.key] = { visible: true, editable: false };
+            });
+            permissions[user.username] = defaultPerm;
+        }
+    });
+    
+    savePermissions(permissions);
+    return permissions;
 }
 
 function savePermissions(permissions) {
